@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -119,8 +120,10 @@ function PDFSection({ link }: { link: ZBookmarkedLink }) {
 
 export default function LinkContentSection({
   bookmark,
+  onSectionChange,
 }: {
   bookmark: ZBookmark;
+  onSectionChange?: (section: string) => void;
 }) {
   const { t } = useTranslation();
   const { settings } = useReaderSettings();
@@ -139,6 +142,9 @@ export default function LinkContentSection({
   const [section, setSection] = useQueryState("section", {
     defaultValue: defaultSection,
   });
+  useEffect(() => {
+    onSectionChange?.(section);
+  }, [section, onSectionChange]);
   const { data: session } = useSession();
   const isOwner = session?.user?.id === bookmark.userId;
 

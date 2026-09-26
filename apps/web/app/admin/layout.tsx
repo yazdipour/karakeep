@@ -6,7 +6,14 @@ import Sidebar from "@/components/shared/sidebar/Sidebar";
 import SidebarLayout from "@/components/shared/sidebar/SidebarLayout";
 import { getServerAuthSession } from "@/server/auth";
 import { TFunction } from "i18next";
-import { Activity, ArrowLeft, Settings, Users, Wrench } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  Settings,
+  Users,
+  Volume2,
+  Wrench,
+} from "lucide-react";
 
 const adminSidebarItems = (
   t: TFunction,
@@ -39,6 +46,11 @@ const adminSidebarItems = (
     name: t("admin.admin_tools.admin_tools"),
     icon: <Wrench size={18} />,
     path: "/admin/admin_tools",
+  },
+  {
+    name: t("admin.tts.tts_settings"),
+    icon: <Volume2 size={18} />,
+    path: "/admin/tts",
   },
 ];
 

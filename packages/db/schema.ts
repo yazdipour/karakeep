@@ -234,6 +234,11 @@ export const bookmarks = sqliteTable(
     summarizationStatus: text("summarizationStatus", {
       enum: ["pending", "failure", "success"],
     }).default("pending"),
+    // Nullable (no default) since, unlike tagging/summarization, TTS
+    // generation is opt-in per bookmark rather than run automatically.
+    ttsStatus: text("ttsStatus", {
+      enum: ["pending", "failure", "success"],
+    }),
     embeddingStatus: text("embeddingStatus", {
       enum: ["pending", "failure", "success"],
     }).default("pending"),
@@ -328,6 +333,7 @@ export const enum AssetTypes {
   LINK_PRECRAWLED_ARCHIVE = "linkPrecrawledArchive",
   LINK_VIDEO = "linkVideo",
   LINK_HTML_CONTENT = "linkHtmlContent",
+  TTS_AUDIO = "ttsAudio",
   BOOKMARK_ASSET = "bookmarkAsset",
   USER_UPLOADED = "userUploaded",
   AVATAR = "avatar",
@@ -350,6 +356,7 @@ export const assets = sqliteTable(
         AssetTypes.LINK_PRECRAWLED_ARCHIVE,
         AssetTypes.LINK_VIDEO,
         AssetTypes.LINK_HTML_CONTENT,
+        AssetTypes.TTS_AUDIO,
         AssetTypes.BOOKMARK_ASSET,
         AssetTypes.USER_UPLOADED,
         AssetTypes.AVATAR,
@@ -800,6 +807,20 @@ export const backupsTable = sqliteTable(
 export const config = sqliteTable("config", {
   key: text("key").notNull().primaryKey(),
   value: text("value").notNull(),
+});
+
+// Single-row table (id is always TTS_PROVIDER_CONFIG_ID) holding the
+// admin-configured TTS server connection. Absence of a row means TTS is not
+// configured.
+export const ttsProviderConfig = sqliteTable("ttsProviderConfig", {
+  id: text("id").notNull().primaryKey(),
+  provider: text("provider", { enum: ["kokoro"] })
+    .notNull()
+    .default("kokoro"),
+  baseUrl: text("baseUrl").notNull(),
+  apiKey: text("apiKey"),
+  model: text("model").notNull().default("kokoro"),
+  voice: text("voice").notNull().default("af_heart"),
 });
 
 export const ruleEngineRulesTable = sqliteTable(

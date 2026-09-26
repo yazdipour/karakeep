@@ -15,6 +15,7 @@ import {
 import { useSession } from "@/lib/auth/client";
 import useRelativeTime from "@/lib/hooks/relative-time";
 import { useTranslation } from "@/lib/i18n/client";
+import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building,
@@ -36,6 +37,7 @@ import {
 } from "@karakeep/shared/utils/bookmarkUtils";
 
 import SummarizeBookmarkArea from "../bookmarks/SummarizeBookmarkArea";
+import TtsBookmarkArea from "../bookmarks/TtsBookmarkArea";
 import ActionBar from "./ActionBar";
 import { AssetContentSection } from "./AssetContentSection";
 import AttachmentBox from "./AttachmentBox";
@@ -136,6 +138,10 @@ export default function BookmarkPreview({
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<string>("content");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Tracks which section of a link bookmark is showing (reader view,
+  // screenshot, PDF, etc.) so the floating TTS control can hide itself
+  // outside of reader view, where there's no narration text to play.
+  const [linkSection, setLinkSection] = useState<string | null>(null);
   const { data: session } = useSession();
 
   const { data: bookmark } = useQuery(
@@ -166,7 +172,12 @@ export default function BookmarkPreview({
   let content;
   switch (bookmark.content.type) {
     case BookmarkTypes.LINK: {
-      content = <LinkContentSection bookmark={bookmark} />;
+      content = (
+        <LinkContentSection
+          bookmark={bookmark}
+          onSectionChange={setLinkSection}
+        />
+      );
       break;
     }
     case BookmarkTypes.TEXT: {
@@ -188,6 +199,23 @@ export default function BookmarkPreview({
   ) : (
     content
   );
+
+  // Rendered outside the mobile Content/Details tabs (and outside the
+  // collapsible desktop sidebar) so switching tabs or collapsing the sidebar
+  // doesn't unmount it mid-playback.
+  const ttsSection = (
+    <TtsBookmarkArea bookmark={bookmark} readOnly={!isOwner} />
+  );
+  // There's no narration text for the Page Overview/Screenshot/PDF/Archive/
+  // Video sections, so only surface the control in reader view. Text
+  // bookmarks have no sections at all, so they're always eligible. Stays
+  // mounted (just visually hidden) so switching sections never interrupts
+  // playback; `linkSection === null` means the child hasn't reported in yet,
+  // which defaults to showing since most bookmarks default to reader view.
+  const isReaderViewActive =
+    bookmark.content.type !== BookmarkTypes.LINK ||
+    linkSection === null ||
+    linkSection === "cached";
 
   const detailsSection = (
     <div className="flex flex-col gap-5">
@@ -231,6 +259,21 @@ export default function BookmarkPreview({
     </div>
   );
 
+  // Floating over the reading area, confined to just the reader pane (not
+  // the details sidebar). Hidden via CSS rather than unmounted when
+  // collapsing the sidebar or leaving reader view, so playback never gets
+  // interrupted.
+  const floatingTts = (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4",
+        !isReaderViewActive && "hidden",
+      )}
+    >
+      <div className="pointer-events-auto">{ttsSection}</div>
+    </div>
+  );
+
   return (
     <>
       {/* Render original layout for wide screens */}
@@ -248,6 +291,7 @@ export default function BookmarkPreview({
               )}
             </button>
             {contentSection}
+            {floatingTts}
           </div>
           {!sidebarCollapsed && (
             <div className="flex w-1/3 flex-col gap-3 overflow-auto border-l bg-muted/40 p-5">
@@ -257,7 +301,7 @@ export default function BookmarkPreview({
         </div>
       </div>
       {/* Render tabbed layout for narrow/vertical screens */}
-      <div className="flex h-full w-full flex-col overflow-hidden lg:hidden">
+      <div className="relative flex h-full w-full flex-col overflow-hidden lg:hidden">
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
@@ -284,6 +328,9 @@ export default function BookmarkPreview({
             {detailsSection}
           </TabsContent>
         </Tabs>
+        {/* Rendered outside the Tabs (as a sibling, not inside TabsContent) so
+            switching between Content/Details never unmounts it. */}
+        {floatingTts}
       </div>
     </>
   );

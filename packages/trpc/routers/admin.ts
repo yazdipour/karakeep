@@ -23,6 +23,7 @@ import {
   QueuePriority,
   SearchIndexingQueue,
   triggerSearchReindex,
+  TtsProviderConfigService,
   VideoWorkerQueue,
   WebhookQueue,
   zAdminMaintenanceTaskSchema,
@@ -51,6 +52,27 @@ const adminBookmarksProcedure = createAdminScopedProcedure("bookmarks");
 const adminJobsProcedure = createAdminScopedProcedure("jobs");
 const adminSystemProcedure = createAdminScopedProcedure("system");
 const adminUsersProcedure = createAdminScopedProcedure("users");
+
+// Cloud provider instance-metadata endpoints: no legitimate TTS server would
+// live here, and they're the classic SSRF exfiltration target (AWS/GCP/Azure
+// credentials). Deliberately doesn't block private/LAN IPs since those are
+// exactly where self-hosted TTS servers normally live.
+const BLOCKED_METADATA_HOSTNAMES = new Set([
+  "169.254.169.254",
+  "169.254.170.2",
+  "fd00:ec2::254",
+  "metadata.google.internal",
+]);
+
+function assertNotCloudMetadataUrl(url: string) {
+  const hostname = new URL(url).hostname.toLowerCase();
+  if (BLOCKED_METADATA_HOSTNAMES.has(hostname)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This host is not allowed as a TTS server address",
+    });
+  }
+}
 
 function modifiedWithin(modifiedWithinSeconds?: number) {
   return modifiedWithinSeconds === undefined
@@ -996,5 +1018,103 @@ export const adminAppRouter = router({
       await syncStripeDataToDatabase(subscription.stripeCustomerId, ctx.db);
 
       return { success: true };
+    }),
+  getTtsConfig: adminSystemProcedure
+    .output(
+      z
+        .object({
+          provider: z.literal("kokoro"),
+          baseUrl: z.string(),
+          model: z.string(),
+          voice: z.string(),
+          hasApiKey: z.boolean(),
+        })
+        .nullable(),
+    )
+    .query(async ({ ctx }) => {
+      const config = await TtsProviderConfigService.get(ctx.db);
+      if (!config) {
+        return null;
+      }
+      return {
+        provider: config.provider,
+        baseUrl: config.baseUrl,
+        model: config.model,
+        voice: config.voice,
+        hasApiKey: !!config.apiKey,
+      };
+    }),
+  updateTtsConfig: adminSystemProcedure
+    .input(
+      z.object({
+        provider: z.literal("kokoro"),
+        baseUrl: z.string().url(),
+        // Empty/omitted keeps the currently stored key, if any.
+        apiKey: z.string().optional(),
+        model: z.string().min(1),
+        voice: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // The worker fetches this URL unattended on every future TTS job, so
+      // block cloud metadata endpoints here too, not just on discovery.
+      assertNotCloudMetadataUrl(input.baseUrl);
+      await TtsProviderConfigService.set(ctx.db, input);
+    }),
+  discoverTtsVoices: adminSystemProcedure
+    .input(
+      z.object({
+        baseUrl: z.string().url(),
+        apiKey: z.string().optional(),
+      }),
+    )
+    .output(z.object({ voices: z.array(z.string()) }))
+    .mutation(async ({ input, ctx }) => {
+      // Kokoro-style servers are almost always self-hosted on a private
+      // LAN/localhost, so we can't block private IPs the way the crawler
+      // does. We can still block the one target with no legitimate TTS use
+      // case: cloud provider instance-metadata endpoints, a classic SSRF
+      // exfiltration vector.
+      assertNotCloudMetadataUrl(input.baseUrl);
+      // getTtsConfig never echoes the stored key back to the client, so the
+      // form field is empty on every load. Without this fallback,
+      // discovering voices against an already-configured, auth-required
+      // server would 401 forever after the first save.
+      let apiKey = input.apiKey;
+      if (!apiKey) {
+        const existing = await TtsProviderConfigService.get(ctx.db);
+        apiKey = existing?.apiKey ?? undefined;
+      }
+      let response: Response;
+      try {
+        response = await fetch(`${input.baseUrl}/audio/voices`, {
+          headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+          signal: AbortSignal.timeout(10_000),
+        });
+      } catch (e) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Failed to reach the TTS server: ${e}`,
+        });
+      }
+      if (!response.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `TTS server returned ${response.status}`,
+        });
+      }
+      const data: unknown = await response.json();
+      const rawVoices = Array.isArray(data)
+        ? data
+        : ((data as { voices?: unknown[] })?.voices ?? []);
+      const voices = rawVoices
+        .map((v) =>
+          typeof v === "string"
+            ? v
+            : ((v as { voice_id?: string; id?: string })?.voice_id ??
+              (v as { id?: string })?.id),
+        )
+        .filter((v): v is string => typeof v === "string");
+      return { voices };
     }),
 });
