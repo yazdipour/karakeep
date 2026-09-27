@@ -37,8 +37,9 @@ const MAX_CHUNKS = 300;
 const SYNTHESIS_CONCURRENCY = 4;
 // Only synthesize this many chunks before marking the bookmark playable; the
 // rest keep generating in the background so the user isn't stuck waiting for
-// the whole article before they can start listening.
-const INITIAL_CHUNKS = 3;
+// the whole article before they can start listening. Kept at 1 so playback
+// can start as soon as possible instead of blocking on a multi-chunk batch.
+const INITIAL_CHUNKS = 1;
 
 async function attemptMarkStatus(
   jobData: object | undefined,
