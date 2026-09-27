@@ -21,6 +21,7 @@ import {
   Rss,
   Sparkles,
   User,
+  Volume2,
   Webhook,
 } from "lucide-react";
 
@@ -68,6 +69,11 @@ const settingsSidebarItems = (
           },
         ]
       : []),
+    {
+      name: t("settings.tts.tts_settings"),
+      icon: <Volume2 size={18} />,
+      path: "/settings/tts",
+    },
     {
       name: t("settings.feeds.rss_subscriptions"),
       icon: <Rss size={18} />,

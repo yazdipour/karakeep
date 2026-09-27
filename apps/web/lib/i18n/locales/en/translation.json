@@ -99,6 +99,10 @@
     "create": "Create",
     "fetch_now": "Fetch Now",
     "summarize_with_ai": "Summarize with AI",
+    "listen": "Listen",
+    "generating_audio": "Generating audio…",
+    "audio_generation_failed": "Failed to generate audio",
+    "retry": "Retry",
     "edit_title": "Edit Title",
     "sign_out": "Sign Out",
     "close": "Close",
@@ -276,6 +280,9 @@
       "curated_tags_description": "Optionally restrict AI tagging to only use tags from this list. When no tags are selected, the AI generates tags freely.",
       "curated_tags_updated": "Curated tags updated successfully!",
       "curated_tags_update_failed": "Failed to update curated tags"
+    },
+    "tts": {
+      "tts_settings": "Text-to-Speech"
     },
     "feeds": {
       "rss_subscriptions": "RSS Subscriptions",

@@ -28,6 +28,8 @@ import {
   QuotaService,
   SUPPORTED_BOOKMARK_ASSET_TYPES,
   triggerSearchReindex,
+  TtsProviderConfigService,
+  TtsQueue,
 } from "@karakeep/shared-server";
 import serverConfig from "@karakeep/shared/config";
 import {
@@ -1611,5 +1613,59 @@ Author: ${bookmark.author ?? ""}
         bookmarkId: input.bookmarkId,
         summary: summary.response,
       };
+    }),
+  generateTts: bookmarksProcedure
+    .use(
+      createRateLimitMiddleware({
+        name: "bookmarks.generateTts",
+        windowMs: 30 * 60 * 1000,
+        maxRequests: 20,
+      }),
+    )
+    .input(
+      z.object({
+        bookmarkId: z.string(),
+      }),
+    )
+    .output(
+      z.object({
+        bookmarkId: z.string(),
+      }),
+    )
+    .use(ensureBookmarkOwnership)
+    .mutation(async ({ input, ctx }) => {
+      const ttsProvider = await TtsProviderConfigService.get(
+        ctx.db,
+        ctx.user.id,
+      );
+      if (!ttsProvider) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No TTS server configured",
+        });
+      }
+      const bookmark = await ctx.db.query.bookmarks.findFirst({
+        where: eq(bookmarks.id, input.bookmarkId),
+        columns: { type: true },
+      });
+      if (
+        !bookmark ||
+        (bookmark.type !== BookmarkTypes.LINK &&
+          bookmark.type !== BookmarkTypes.TEXT)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Text-to-speech is only supported for links and text bookmarks",
+        });
+      }
+
+      await ctx.db
+        .update(bookmarks)
+        .set({ ttsStatus: "pending" })
+        .where(eq(bookmarks.id, input.bookmarkId));
+      await TtsQueue.enqueue({ bookmarkId: input.bookmarkId });
+
+      return { bookmarkId: input.bookmarkId };
     }),
 });

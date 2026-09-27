@@ -45,11 +45,16 @@ export function isBookmarkStillSummarizing(bookmark: ZBookmark) {
   return bookmark.summarizationStatus == "pending";
 }
 
+export function isBookmarkStillGeneratingTts(bookmark: ZBookmark) {
+  return bookmark.ttsStatus == "pending";
+}
+
 export function isBookmarkStillLoading(bookmark: ZBookmark) {
   return (
     isBookmarkStillTagging(bookmark) ||
     isBookmarkStillCrawling(bookmark) ||
-    isBookmarkStillSummarizing(bookmark)
+    isBookmarkStillSummarizing(bookmark) ||
+    isBookmarkStillGeneratingTts(bookmark)
   );
 }
 

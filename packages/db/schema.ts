@@ -234,6 +234,11 @@ export const bookmarks = sqliteTable(
     summarizationStatus: text("summarizationStatus", {
       enum: ["pending", "failure", "success"],
     }).default("pending"),
+    // Nullable (no default) since, unlike tagging/summarization, TTS
+    // generation is opt-in per bookmark rather than run automatically.
+    ttsStatus: text("ttsStatus", {
+      enum: ["pending", "failure", "success"],
+    }),
     embeddingStatus: text("embeddingStatus", {
       enum: ["pending", "failure", "success"],
     }).default("pending"),
@@ -328,6 +333,7 @@ export const enum AssetTypes {
   LINK_PRECRAWLED_ARCHIVE = "linkPrecrawledArchive",
   LINK_VIDEO = "linkVideo",
   LINK_HTML_CONTENT = "linkHtmlContent",
+  TTS_AUDIO = "ttsAudio",
   BOOKMARK_ASSET = "bookmarkAsset",
   USER_UPLOADED = "userUploaded",
   AVATAR = "avatar",
@@ -350,6 +356,7 @@ export const assets = sqliteTable(
         AssetTypes.LINK_PRECRAWLED_ARCHIVE,
         AssetTypes.LINK_VIDEO,
         AssetTypes.LINK_HTML_CONTENT,
+        AssetTypes.TTS_AUDIO,
         AssetTypes.BOOKMARK_ASSET,
         AssetTypes.USER_UPLOADED,
         AssetTypes.AVATAR,
@@ -802,6 +809,22 @@ export const config = sqliteTable("config", {
   value: text("value").notNull(),
 });
 
+// One row per user holding their OpenAI-compatible TTS server connection.
+// Absence of a row for a user means TTS is not configured for them.
+export const ttsProviderConfig = sqliteTable("ttsProviderConfig", {
+  userId: text("userId")
+    .notNull()
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider", { enum: ["openai-compatible"] })
+    .notNull()
+    .default("openai-compatible"),
+  baseUrl: text("baseUrl").notNull(),
+  apiKey: text("apiKey"),
+  model: text("model").notNull(),
+  voice: text("voice").notNull(),
+});
+
 export const ruleEngineRulesTable = sqliteTable(
   "ruleEngineRules",
   {
@@ -1070,6 +1093,7 @@ export const userRelations = relations(users, ({ many, one }) => ({
   listCollaborations: many(listCollaborators),
   backups: many(backupsTable),
   listInvitations: many(listInvitations),
+  ttsProviderConfig: one(ttsProviderConfig),
 }));
 
 export const bookmarkRelations = relations(bookmarks, ({ many, one }) => ({
@@ -1321,6 +1345,16 @@ export const backupsRelations = relations(backupsTable, ({ one }) => ({
     references: [assets.id],
   }),
 }));
+
+export const ttsProviderConfigRelations = relations(
+  ttsProviderConfig,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [ttsProviderConfig.userId],
+      references: [users.id],
+    }),
+  }),
+);
 
 export const userReadingProgressRelations = relations(
   userReadingProgress,

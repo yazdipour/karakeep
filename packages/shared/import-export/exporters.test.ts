@@ -17,6 +17,7 @@ function linkBookmark(
     favourited: false,
     taggingStatus: "success",
     summarizationStatus: null,
+    ttsStatus: null,
     embeddingStatus: null,
     note: null,
     summary: null,
