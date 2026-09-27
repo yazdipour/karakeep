@@ -65,6 +65,16 @@ export function getBookmarkRefreshInterval(
     return false;
   }
 
+  // TTS generation is triggered on-demand, often long after the bookmark
+  // was created (that's the point of "read later"), unlike crawling/
+  // tagging/summarization which all kick off around creation time. So it
+  // can't share the createdAt-anchored backoff below: for any bookmark
+  // older than a few hours, that backoff would resolve to `false` and the
+  // "Generating audio..." button would never learn the job finished.
+  if (isBookmarkStillGeneratingTts(bookmark)) {
+    return 1000;
+  }
+
   // For the first 30 seconds, we'll refresh the bookmark every second
   if (Date.now().valueOf() - bookmark.createdAt.valueOf() < 30 * 1000) {
     return 1000;

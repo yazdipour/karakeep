@@ -2,10 +2,18 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { TtsProviderConfigService } from "@karakeep/shared-server";
+import serverConfig from "@karakeep/shared/config";
 
-import { createScopedAuthedProcedure, router } from "../index";
+import {
+  createRateLimitMiddleware,
+  createScopedAuthedProcedure,
+  router,
+} from "../index";
 
 const ttsProcedure = createScopedAuthedProcedure("users");
+
+const PREVIEW_SAMPLE_TEXT =
+  "This is a preview of the selected voice for narrating your bookmarks.";
 
 // Cloud provider instance-metadata endpoints: no legitimate TTS server would
 // live here, and they're the classic SSRF exfiltration target (AWS/GCP/Azure
@@ -233,5 +241,66 @@ export const ttsAppRouter = router({
         )
         .filter((m): m is string => typeof m === "string");
       return { models };
+    }),
+  // Synthesizes a short fixed phrase so the user can hear a voice before
+  // saving it. Runs through the server (rather than the browser calling the
+  // TTS server directly) so the API key never has to leave the backend.
+  previewVoice: ttsProcedure
+    .use(
+      createRateLimitMiddleware({
+        name: "tts.previewVoice",
+        windowMs: 60 * 1000,
+        maxRequests: 10,
+      }),
+    )
+    .input(
+      z.object({
+        baseUrl: z.string().url(),
+        apiKey: z.string().optional(),
+        model: z.string().min(1),
+        voice: z.string().min(1),
+      }),
+    )
+    .output(z.object({ audio: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      assertNotCloudMetadataUrl(input.baseUrl);
+      let apiKey = input.apiKey;
+      if (!apiKey) {
+        const existing = await TtsProviderConfigService.get(
+          ctx.db,
+          ctx.user.id,
+        );
+        apiKey = existing?.apiKey ?? undefined;
+      }
+      let response: Response;
+      try {
+        response = await fetch(`${input.baseUrl}/audio/speech`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: input.model,
+            input: PREVIEW_SAMPLE_TEXT,
+            voice: input.voice,
+            response_format: "mp3",
+          }),
+          signal: AbortSignal.timeout(serverConfig.tts.timeoutSec * 1000),
+        });
+      } catch (e) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Failed to reach the TTS server: ${e}`,
+        });
+      }
+      if (!response.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `TTS server returned ${response.status}: ${await response.text()}`,
+        });
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return { audio: buffer.toString("base64") };
     }),
 });

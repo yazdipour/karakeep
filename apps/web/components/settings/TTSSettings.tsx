@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { useTranslation } from "@/lib/i18n/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Save, Search } from "lucide-react";
+import { Play, Save, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { useTRPC } from "@karakeep/shared-react/trpc";
@@ -94,6 +94,38 @@ function TTSProviderSettings() {
         },
       }),
     );
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const { mutate: previewVoice, isPending: isPreviewing } = useMutation(
+    api.tts.previewVoice.mutationOptions({
+      onSuccess: (data) => {
+        if (previewUrlRef.current) {
+          URL.revokeObjectURL(previewUrlRef.current);
+        }
+        const bytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0));
+        const url = URL.createObjectURL(
+          new Blob([bytes], { type: "audio/mpeg" }),
+        );
+        previewUrlRef.current = url;
+        const audio = audioRef.current ?? new Audio();
+        audioRef.current = audio;
+        audio.src = url;
+        void audio.play();
+      },
+      onError: (error) => {
+        toast.error(`Failed to preview voice: ${error.message}`);
+      },
+    }),
+  );
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    };
+  }, []);
 
   return (
     <SettingsSection
@@ -222,6 +254,23 @@ function TTSProviderSettings() {
           >
             <Search className="mr-2 size-4" />
             Discover
+          </ActionButton>
+          <ActionButton
+            type="button"
+            variant="outline"
+            loading={isPreviewing}
+            disabled={!baseUrl || !model || !voice}
+            onClick={() =>
+              previewVoice({
+                baseUrl,
+                apiKey: apiKey || undefined,
+                model,
+                voice,
+              })
+            }
+          >
+            <Play className="mr-2 size-4" />
+            Play sample
           </ActionButton>
         </div>
       </Field>
