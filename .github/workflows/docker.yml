@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - ci/fork-docker-build2
   workflow_dispatch: {}
 
 jobs:
