@@ -21,7 +21,7 @@ variable "SERVER_VERSION" {
 }
 
 variable "CACHE_REPO" {
-  default = "ghcr.io/karakeep-app/karakeep-build-cache"
+  default = "ghcr.io/yazdipour/karakeep-build-cache"
 }
 
 function "tags" {
@@ -62,7 +62,7 @@ target "_common" {
 target "web" {
   inherits   = ["_common"]
   target     = "web"
-  tags       = tags(["ghcr.io/hoarder-app/hoarder-web", "ghcr.io/karakeep-app/karakeep-web"])
+  tags       = tags(["ghcr.io/yazdipour/karakeep-web"])
   cache-from = cache_from("web")
   cache-to   = cache_to("web")
 }
@@ -70,7 +70,7 @@ target "web" {
 target "workers" {
   inherits   = ["_common"]
   target     = "workers"
-  tags       = tags(["ghcr.io/hoarder-app/hoarder-workers", "ghcr.io/karakeep-app/karakeep-workers"])
+  tags       = tags(["ghcr.io/yazdipour/karakeep-workers"])
   cache-from = cache_from("workers")
   cache-to   = cache_to("workers")
 }
@@ -78,7 +78,7 @@ target "workers" {
 target "cli" {
   inherits   = ["_common"]
   target     = "cli"
-  tags       = tags(["ghcr.io/hoarder-app/hoarder-cli", "ghcr.io/karakeep-app/karakeep-cli"])
+  tags       = tags(["ghcr.io/yazdipour/karakeep-cli"])
   cache-from = cache_from("cli")
   cache-to   = cache_to("cli")
 }
@@ -86,7 +86,7 @@ target "cli" {
 target "mcp" {
   inherits   = ["_common"]
   target     = "mcp"
-  tags       = tags(["ghcr.io/karakeep-app/karakeep-mcp"])
+  tags       = tags(["ghcr.io/yazdipour/karakeep-mcp"])
   cache-from = cache_from("mcp")
   cache-to   = cache_to("mcp")
 }
@@ -94,7 +94,7 @@ target "mcp" {
 target "aio" {
   inherits   = ["_common"]
   target     = "aio"
-  tags       = tags(["ghcr.io/hoarder-app/hoarder", "ghcr.io/karakeep-app/karakeep"])
+  tags       = tags(["ghcr.io/yazdipour/karakeep"])
   cache-from = cache_from("aio")
   cache-to   = cache_to("aio")
 }
